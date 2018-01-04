@@ -10,6 +10,7 @@ import (
 	"go/build"
 	"go/parser"
 	"go/token"
+	"go/types"
 	pathpkg "path"
 	"path/filepath"
 	"strconv"
@@ -19,71 +20,35 @@ import (
 	"golang.org/x/tools/go/loader"
 )
 
+type Response struct {
+	Obj      types.Object
+	Position token.Position
+}
+
 // definition reports the location of the definition of an identifier.
-func definition(q *Query) error {
-	// First try the simple resolution done by parser.
-	// It only works for intra-file references but it is very fast.
-	// (Extending this approach to all the files of the package,
-	// resolved using ast.NewPackage, was not worth the effort.)
-	{
-		qpos, err := fastQueryPos(q.Build, q.Pos)
-		if err != nil {
-			return err
-		}
-
-		id, _ := qpos.path[0].(*ast.Ident)
-		if id == nil {
-			return fmt.Errorf("no identifier here")
-		}
-
-		// Did the parser resolve it to a local object?
-		if obj := id.Obj; obj != nil && obj.Pos().IsValid() {
-			q.Output(qpos.fset, &definitionResult{
-				pos:   obj.Pos(),
-				descr: fmt.Sprintf("%s %s", obj.Kind, obj.Name),
-			})
-			return nil // success
-		}
-
-		// Qualified identifier?
-		if pkg := packageForQualIdent(qpos.path, id); pkg != "" {
-			srcdir := filepath.Dir(qpos.fset.File(qpos.start).Name())
-			tok, pos, err := findPackageMember(q.Build, qpos.fset, srcdir, pkg, id.Name)
-			if err != nil {
-				return err
-			}
-			q.Output(qpos.fset, &definitionResult{
-				pos:   pos,
-				descr: fmt.Sprintf("%s %s.%s", tok, pkg, id.Name),
-			})
-			return nil // success
-		}
-
-		// Fall back on the type checker.
-	}
-
+func definition(q *Query) (*Response, error) {
 	// Run the type checker.
 	lconf := loader.Config{Build: q.Build}
 	allowErrors(&lconf)
 
 	if _, err := importQueryPackage(q.Pos, &lconf); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Load/parse/type-check the program.
 	lprog, err := lconf.Load()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	qpos, err := parseQueryPos(lprog, q.Pos, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	id, _ := qpos.path[0].(*ast.Ident)
 	if id == nil {
-		return fmt.Errorf("no identifier here")
+		return nil, fmt.Errorf("no identifier here")
 	}
 
 	// Look up the declaration of this identifier.
@@ -97,19 +62,21 @@ func definition(q *Query) error {
 			// Happens for y in "switch y := x.(type)",
 			// and the package declaration,
 			// but I think that's all.
-			return fmt.Errorf("no object for identifier")
+			return nil, fmt.Errorf("no object for identifier")
 		}
 	}
 
 	if !obj.Pos().IsValid() {
-		return fmt.Errorf("%s is built in", obj.Name())
+		return nil, fmt.Errorf("%s is built in", obj.Name())
 	}
 
-	q.Output(lprog.Fset, &definitionResult{
-		pos:   obj.Pos(),
-		descr: qpos.objectString(obj),
-	})
-	return nil
+	position := qpos.fset.Position(obj.Pos())
+
+	response := &Response{
+		Obj:      obj,
+		Position: position,
+	}
+	return response, nil
 }
 
 // packageForQualIdent returns the package p if id is X in a qualified

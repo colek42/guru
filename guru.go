@@ -76,38 +76,38 @@ type Query struct {
 	Reflection bool      // model reflection soundly (currently slow).
 
 	// result-printing function
-	Output func(*token.FileSet, QueryResult)
+	Output func(*token.FileSet, QueryResult) []byte
 }
 
 // Run runs an guru query and populates its Fset and Result.
-func Run(mode string, q *Query) error {
+func Run(mode string, q *Query) (*Response, error) {
 	switch mode {
-	case "callees":
-		return callees(q)
-	case "callers":
-		return callers(q)
-	case "callstack":
-		return callstack(q)
-	case "peers":
-		return peers(q)
-	case "pointsto":
-		return pointsto(q)
-	case "whicherrs":
-		return whicherrs(q)
+	/* case "callees":*/
+	//return callees(q)
+	//case "callers":
+	//return callers(q)
+	//case "callstack":
+	//return callstack(q)
+	//case "peers":
+	//return peers(q)
+	//case "pointsto":
+	//return pointsto(q)
+	//case "whicherrs":
+	/*return whicherrs(q)*/
 	case "definition":
 		return definition(q)
-	case "describe":
-		return describe(q)
-	case "freevars":
-		return freevars(q)
-	case "implements":
-		return implements(q)
-	case "referrers":
-		return referrers(q)
-	case "what":
-		return what(q)
+	/*case "describe":*/
+	//return describe(q)
+	//case "freevars":
+	//return freevars(q)
+	//case "implements":
+	//return implements(q)
+	//case "referrers":
+	//return referrers(q)
+	//case "what":
+	/*return what(q)*/
 	default:
-		return fmt.Errorf("invalid mode: %q", mode)
+		return nil, fmt.Errorf("invalid mode: %q", mode)
 	}
 }
 
